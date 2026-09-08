@@ -146,10 +146,52 @@ func runVendorSync(_ *cobra.Command, args []string) error {
 		}
 	}
 
+	// Record what was just synced into the Hub-tracked vendor registry, so
+	// other machines sharing this Hub can discover these vendors (see
+	// `axon vendor list`'s drift warning) even if they never add them to
+	// their own axon.yaml. Non-fatal: this is bookkeeping, not the sync itself.
+	if err := updateVendorRegistry(cfg.RepoPath, vendors); err != nil {
+		printWarn("", fmt.Sprintf("could not update vendor registry: %v", err))
+	}
+
 	if failed > 0 {
 		return fmt.Errorf("vendor sync failed (%d mirrored, %d skipped, %d error)", mirrored, skipped, failed)
 	}
 	return nil
+}
+
+// updateVendorRegistry upserts vendors into the Hub-tracked vendor registry
+// (internal/vendor.RegistryFileName), preserving existing entries for other
+// vendors untouched by this run — important for `axon vendor sync <name>`,
+// which must not drop registry entries for vendors it didn't process.
+func updateVendorRegistry(hubRoot string, vendors []config.Vendor) error {
+	existing, err := vendor.ReadRegistry(hubRoot)
+	if err != nil {
+		return err
+	}
+
+	updates := make(map[string]vendor.RegistryEntry, len(vendors))
+	for _, v := range vendors {
+		updates[v.Name] = vendor.RegistryEntry{Name: v.Name, Repo: v.Repo, Subdir: v.Subdir, Dest: v.Dest, Ref: v.Ref}
+	}
+
+	merged := make([]vendor.RegistryEntry, 0, len(existing)+len(vendors))
+	for _, e := range existing {
+		if u, ok := updates[e.Name]; ok {
+			merged = append(merged, u)
+			delete(updates, e.Name)
+		} else {
+			merged = append(merged, e)
+		}
+	}
+	// Append brand-new entries (not already in the registry) in vendors' order.
+	for _, v := range vendors {
+		if u, ok := updates[v.Name]; ok {
+			merged = append(merged, u)
+		}
+	}
+
+	return vendor.WriteRegistry(hubRoot, merged)
 }
 
 // validateVendors checks all entries for required fields and duplicate names.

@@ -87,6 +87,84 @@ func TestSelectVendorByName_NotFound(t *testing.T) {
 	}
 }
 
+// ── updateVendorRegistry ──────────────────────────────────────────────────────
+
+func TestUpdateVendorRegistry_WritesNewEntries(t *testing.T) {
+	hubRoot := t.TempDir()
+	vendors := []config.Vendor{
+		{Name: "v1", Repo: "https://github.com/x/y.git", Subdir: ".", Dest: "skills/v1", Ref: "main"},
+		{Name: "v2", Repo: "https://github.com/x/z.git", Subdir: "a", Dest: "skills/v2"},
+	}
+
+	if err := updateVendorRegistry(hubRoot, vendors); err != nil {
+		t.Fatalf("updateVendorRegistry: %v", err)
+	}
+
+	got, err := vendor.ReadRegistry(hubRoot)
+	if err != nil {
+		t.Fatalf("ReadRegistry: %v", err)
+	}
+	if len(got) != 2 || got[0].Name != "v1" || got[1].Name != "v2" {
+		t.Errorf("registry = %+v, want entries for v1 then v2", got)
+	}
+}
+
+// TestUpdateVendorRegistry_PreservesOtherEntries ensures that syncing a single
+// named vendor (`axon vendor sync <name>`) doesn't drop registry entries
+// written for other vendors by a previous full sync (possibly on another
+// machine, pulled in via `axon sync`).
+func TestUpdateVendorRegistry_PreservesOtherEntries(t *testing.T) {
+	hubRoot := t.TempDir()
+	other := config.Vendor{Name: "other", Repo: "https://github.com/a/b.git", Subdir: ".", Dest: "skills/other"}
+	if err := updateVendorRegistry(hubRoot, []config.Vendor{other}); err != nil {
+		t.Fatalf("seed updateVendorRegistry: %v", err)
+	}
+
+	v1 := config.Vendor{Name: "v1", Repo: "https://github.com/x/y.git", Subdir: ".", Dest: "skills/v1"}
+	if err := updateVendorRegistry(hubRoot, []config.Vendor{v1}); err != nil {
+		t.Fatalf("updateVendorRegistry: %v", err)
+	}
+
+	got, err := vendor.ReadRegistry(hubRoot)
+	if err != nil {
+		t.Fatalf("ReadRegistry: %v", err)
+	}
+	names := map[string]bool{}
+	for _, e := range got {
+		names[e.Name] = true
+	}
+	if !names["other"] || !names["v1"] {
+		t.Errorf("registry = %+v, want both 'other' and 'v1' present", got)
+	}
+}
+
+// TestUpdateVendorRegistry_UpdatesExistingEntry verifies that re-syncing a
+// vendor whose repo/dest changed in axon.yaml updates its registry entry in
+// place rather than appending a duplicate.
+func TestUpdateVendorRegistry_UpdatesExistingEntry(t *testing.T) {
+	hubRoot := t.TempDir()
+	v1 := config.Vendor{Name: "v1", Repo: "https://github.com/x/y.git", Subdir: ".", Dest: "skills/v1"}
+	if err := updateVendorRegistry(hubRoot, []config.Vendor{v1}); err != nil {
+		t.Fatalf("seed updateVendorRegistry: %v", err)
+	}
+
+	v1Updated := config.Vendor{Name: "v1", Repo: "https://github.com/x/y.git", Subdir: "new-subdir", Dest: "skills/v1"}
+	if err := updateVendorRegistry(hubRoot, []config.Vendor{v1Updated}); err != nil {
+		t.Fatalf("updateVendorRegistry: %v", err)
+	}
+
+	got, err := vendor.ReadRegistry(hubRoot)
+	if err != nil {
+		t.Fatalf("ReadRegistry: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("registry = %+v, want exactly 1 entry (updated in place)", got)
+	}
+	if got[0].Subdir != "new-subdir" {
+		t.Errorf("registry[0].Subdir = %q, want %q", got[0].Subdir, "new-subdir")
+	}
+}
+
 // ── syncVendorEntry (integration-style with a local git repo as source) ───────
 
 // makeLocalVendorRepo creates a minimal git repo with a subdir containing a file,

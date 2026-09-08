@@ -535,6 +535,8 @@ card-skill     skills/card-skill     v1.2    pending             github.com/exam
 - `pending` — this entry has never been synced.
 - `missing dest` — a commit was recorded, but the Hub destination is gone (e.g. deleted by hand); re-run `axon vendor sync <name>` to restore it.
 
+**Cross-machine drift detection:** `~/.axon/axon.yaml` is per-machine — it never travels through `axon sync`. If you configure a vendor on one machine, `axon vendor sync` also writes a small registry file (`.axon-vendors.lock.yaml`) at the Hub root recording that vendor's `name`/`repo`/`subdir`/`dest`/`ref`. Because this file lives inside the Hub, it *does* travel with `axon sync`. On a second machine, `axon vendor list` reads this registry and warns about any entry that isn't in that machine's own `axon.yaml` — content pulled in via `axon sync` but never configured locally, so it would otherwise be silently skipped by future `axon vendor sync` runs. Add the reported entry to your local `vendors:` block to resolve the warning.
+
 #### Configuration Example
 
 Add a `vendors:` section to your `~/.axon/axon.yaml`:

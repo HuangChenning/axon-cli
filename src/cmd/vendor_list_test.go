@@ -80,6 +80,44 @@ func TestVendorNames(t *testing.T) {
 	}
 }
 
+// ── unregisteredLocally ───────────────────────────────────────────────────────
+
+func TestUnregisteredLocally_FlagsEntryMissingFromLocalConfig(t *testing.T) {
+	local := []config.Vendor{{Name: "v1"}}
+	registered := []vendor.RegistryEntry{
+		{Name: "v1", Repo: "https://github.com/x/y.git", Dest: "skills/v1"},
+		{Name: "v2", Repo: "https://github.com/x/z.git", Dest: "skills/v2"},
+	}
+
+	got := unregisteredLocally(local, registered)
+	if len(got) != 1 || got[0].Name != "v2" {
+		t.Errorf("unregisteredLocally = %+v, want only v2", got)
+	}
+}
+
+func TestUnregisteredLocally_NoneMissing(t *testing.T) {
+	local := []config.Vendor{{Name: "v1"}, {Name: "v2"}}
+	registered := []vendor.RegistryEntry{{Name: "v1"}, {Name: "v2"}}
+
+	got := unregisteredLocally(local, registered)
+	if len(got) != 0 {
+		t.Errorf("unregisteredLocally = %+v, want none missing", got)
+	}
+}
+
+// TestUnregisteredLocally_EmptyLocalConfig covers the exact scenario reported:
+// a machine with zero vendors configured locally (e.g. axon.yaml was never
+// updated after a teammate added a vendor on another machine) should still see
+// every registry entry flagged as missing.
+func TestUnregisteredLocally_EmptyLocalConfig(t *testing.T) {
+	registered := []vendor.RegistryEntry{{Name: "v1"}, {Name: "v2"}}
+
+	got := unregisteredLocally(nil, registered)
+	if len(got) != 2 {
+		t.Errorf("unregisteredLocally = %+v, want both entries flagged", got)
+	}
+}
+
 func TestCompleteVendorNames_FiltersByPrefix(t *testing.T) {
 	// os.UserHomeDir() reads USERPROFILE on Windows and HOME on Unix.
 	home := t.TempDir()

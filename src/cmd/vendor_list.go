@@ -39,31 +39,81 @@ func runVendorList(_ *cobra.Command, _ []string) error {
 
 	if len(cfg.Vendors) == 0 {
 		printWarn("", "no vendors configured — add a 'vendors' block to ~/.axon/axon.yaml")
+	} else {
+		if err := validateVendors(cfg.Vendors); err != nil {
+			return err
+		}
+
+		w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(w, "NAME\tDEST\tREF\tSTATUS\tREPO")
+		for _, v := range cfg.Vendors {
+			ref := v.Ref
+			if ref == "" {
+				ref = "main"
+			}
+			status, err := vendorSyncStatus(cfg.RepoPath, v)
+			if err != nil {
+				status = fmt.Sprintf("error: %v", err)
+			}
+			repoCol := v.Repo
+			if v.Subdir != "." {
+				repoCol = fmt.Sprintf("%s (%s)", v.Repo, v.Subdir)
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", v.Name, v.Dest, ref, status, repoCol)
+		}
+		if err := w.Flush(); err != nil {
+			return err
+		}
+	}
+
+	return warnUnconfiguredVendors(cfg)
+}
+
+// warnUnconfiguredVendors compares the Hub-tracked vendor registry (written by
+// `axon vendor sync` — possibly on a different machine sharing this Hub)
+// against the vendors configured locally, and warns about entries present in
+// the Hub but missing here. This is the case where another machine mirrored a
+// vendor and pushed it, this machine pulled the files via `axon sync`, but its
+// own axon.yaml was never updated with that vendor's entry — so it would
+// otherwise silently miss out on future re-syncs.
+func warnUnconfiguredVendors(cfg *config.Config) error {
+	registered, err := vendor.ReadRegistry(cfg.RepoPath)
+	if err != nil {
+		return err
+	}
+	missing := unregisteredLocally(cfg.Vendors, registered)
+	if len(missing) == 0 {
 		return nil
 	}
 
-	if err := validateVendors(cfg.Vendors); err != nil {
-		return err
-	}
-
-	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tDEST\tREF\tSTATUS\tREPO")
-	for _, v := range cfg.Vendors {
-		ref := v.Ref
+	printBullet("In Hub but not in your axon.yaml (synced by another machine):")
+	for _, e := range missing {
+		ref := e.Ref
 		if ref == "" {
 			ref = "main"
 		}
-		status, err := vendorSyncStatus(cfg.RepoPath, v)
-		if err != nil {
-			status = fmt.Sprintf("error: %v", err)
-		}
-		repoCol := v.Repo
-		if v.Subdir != "." {
-			repoCol = fmt.Sprintf("%s (%s)", v.Repo, v.Subdir)
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", v.Name, v.Dest, ref, status, repoCol)
+		printWarn(e.Name, fmt.Sprintf(
+			"dest=%s repo=%s subdir=%s ref=%s — add this to your 'vendors' block to keep it in sync",
+			e.Dest, e.Repo, e.Subdir, ref,
+		))
 	}
-	return w.Flush()
+	return nil
+}
+
+// unregisteredLocally returns the registry entries whose name isn't present
+// among the locally configured vendors, preserving registry order.
+func unregisteredLocally(local []config.Vendor, registered []vendor.RegistryEntry) []vendor.RegistryEntry {
+	names := make(map[string]struct{}, len(local))
+	for _, v := range local {
+		names[v.Name] = struct{}{}
+	}
+	var missing []vendor.RegistryEntry
+	for _, e := range registered {
+		if _, ok := names[e.Name]; !ok {
+			missing = append(missing, e)
+		}
+	}
+	return missing
 }
 
 // vendorSyncStatus reports the local sync health of a single vendor entry
