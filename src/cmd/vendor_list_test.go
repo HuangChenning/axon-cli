@@ -81,10 +81,11 @@ func TestVendorNames(t *testing.T) {
 }
 
 func TestCompleteVendorNames_FiltersByPrefix(t *testing.T) {
-	orig := os.Getenv("HOME")
+	// os.UserHomeDir() reads USERPROFILE on Windows and HOME on Unix.
 	home := t.TempDir()
-	os.Setenv("HOME", home)
-	defer os.Setenv("HOME", orig)
+	for _, key := range []string{"HOME", "USERPROFILE"} {
+		t.Setenv(key, home)
+	}
 
 	axonDir := filepath.Join(home, ".axon")
 	if err := os.MkdirAll(axonDir, 0o755); err != nil {
