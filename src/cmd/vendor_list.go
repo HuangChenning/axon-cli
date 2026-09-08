@@ -93,8 +93,8 @@ func warnUnconfiguredVendors(cfg *config.Config) error {
 			ref = "main"
 		}
 		printWarn(e.Name, fmt.Sprintf(
-			"dest=%s repo=%s subdir=%s ref=%s — add this to your 'vendors' block to keep it in sync",
-			e.Dest, e.Repo, e.Subdir, ref,
+			"dest=%s repo=%s subdir=%s ref=%s — run 'axon vendor import %s' to add it",
+			e.Dest, e.Repo, e.Subdir, ref, e.Name,
 		))
 	}
 	return nil

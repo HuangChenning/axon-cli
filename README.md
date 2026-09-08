@@ -110,6 +110,7 @@ axon sync
 | `axon update`                  | Self-update axon to the latest GitHub release             |
 | `axon vendor sync [name]`      | Mirror external GitHub subdirs into the Hub               |
 | `axon vendor list`             | List configured vendors and their local sync status       |
+| `axon vendor import [name]`    | Import vendor entries from the Hub registry into axon.yaml |
 | `axon version`                 | Show detailed version/build/runtime info                  |
 
 Global flags:
@@ -535,7 +536,21 @@ card-skill     skills/card-skill     v1.2    pending             github.com/exam
 - `pending` — this entry has never been synced.
 - `missing dest` — a commit was recorded, but the Hub destination is gone (e.g. deleted by hand); re-run `axon vendor sync <name>` to restore it.
 
-**Cross-machine drift detection:** `~/.axon/axon.yaml` is per-machine — it never travels through `axon sync`. If you configure a vendor on one machine, `axon vendor sync` also writes a small registry file (`.axon-vendors.lock.yaml`) at the Hub root recording that vendor's `name`/`repo`/`subdir`/`dest`/`ref`. Because this file lives inside the Hub, it *does* travel with `axon sync`. On a second machine, `axon vendor list` reads this registry and warns about any entry that isn't in that machine's own `axon.yaml` — content pulled in via `axon sync` but never configured locally, so it would otherwise be silently skipped by future `axon vendor sync` runs. Add the reported entry to your local `vendors:` block to resolve the warning.
+**Cross-machine drift detection:** `~/.axon/axon.yaml` is per-machine — it never travels through `axon sync`. If you configure a vendor on one machine, `axon vendor sync` also writes a small registry file (`.axon-vendors.lock.yaml`) at the Hub root recording that vendor's `name`/`repo`/`subdir`/`dest`/`ref`. Because this file lives inside the Hub, it *does* travel with `axon sync`. On a second machine, `axon vendor list` reads this registry and warns about any entry that isn't in that machine's own `axon.yaml` — content pulled in via `axon sync` but never configured locally, so it would otherwise be silently skipped by future `axon vendor sync` runs. Run `axon vendor import` on that machine to resolve the warning.
+
+#### `axon vendor import` — Resolve Drift
+
+`axon vendor import` reads the Hub registry (`.axon-vendors.lock.yaml`) and appends any entries missing from this machine's `axon.yaml` `vendors:` block — the fix for the drift warning above.
+
+```bash
+# Import every entry the registry has that axon.yaml is missing
+axon vendor import
+
+# Import only one entry by name (tab-completes from the missing set)
+axon vendor import book-to-skill
+```
+
+It only appends new entries — existing `vendors:` entries are left untouched, and machine-specific settings like `repo_path` are never copied. It does not mirror any content by itself; run `axon vendor sync` afterwards to pull in the newly added entries.
 
 #### Configuration Example
 
