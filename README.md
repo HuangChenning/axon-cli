@@ -108,7 +108,8 @@ axon sync
 | `axon search <query>`          | Search skills/workflows/commands (keyword + semantic)     |
 | `axon inspect <skill>`         | Show metadata and structure of a skill                    |
 | `axon update`                  | Self-update axon to the latest GitHub release             |
-| `axon vendor sync`             | Mirror external GitHub subdirs into the Hub               |
+| `axon vendor sync [name]`      | Mirror external GitHub subdirs into the Hub               |
+| `axon vendor list`             | List configured vendors and their local sync status       |
 | `axon version`                 | Show detailed version/build/runtime info                  |
 
 Global flags:
@@ -502,6 +503,9 @@ This is perfect for importing curated skills or workflows from community reposit
 ```bash
 # Sync all vendors configured in axon.yaml
 axon vendor sync
+
+# Sync only one vendor entry by name (tab-completes from axon.yaml)
+axon vendor sync book-to-skill
 ```
 
 **How it works:**
@@ -509,6 +513,27 @@ axon vendor sync
 - It uses a **force-overwrite** strategy: local changes in the Hub destination will be overwritten by the upstream source.
 - Content in the Hub is just **plain files**; no `.git` metadata from the source is imported, keeping your Hub's own Git history clean.
 - It calculates a manifest of the last-synced Git SHA for each vendor. If the SHA hasn't changed, it skips the mirror step.
+
+#### `axon vendor list` — Inspect Sync Health
+
+`axon vendor list` prints every configured vendor entry with its local sync status, without touching the network — useful for spotting a failed or never-run entry before kicking off a full `axon vendor sync`.
+
+```bash
+axon vendor list
+```
+
+```text
+NAME           DEST                  REF     STATUS              REPO
+book-to-skill  skills/book-to-skill  master  synced (7d2a8f10)   github.com/virgiliojr94/book-to-skill
+cangjie-skill  skills/cangjie        main    missing dest        github.com/example/cangjie
+card-skill     skills/card-skill     v1.2    pending             github.com/example/card-skill
+```
+
+`STATUS` is one of:
+
+- `synced (<sha>)` — last-mirrored commit, and the Hub destination still exists.
+- `pending` — this entry has never been synced.
+- `missing dest` — a commit was recorded, but the Hub destination is gone (e.g. deleted by hand); re-run `axon vendor sync <name>` to restore it.
 
 #### Configuration Example
 
